@@ -1,6 +1,7 @@
 import {gettext} from 'core/utils';
 import {isPublished} from 'apps/archive/utils';
 import {AuthoringWorkspaceService} from 'apps/authoring/authoring/services/AuthoringWorkspaceService';
+import {IFunctionPointsService} from 'apps/extension-points/services/FunctionPoints';
 
 angular.module('superdesk.apps.dashboard.widgets.relatedItem', [
     'superdesk.apps.dashboard.widgets.base',
@@ -60,6 +61,7 @@ RelatedItemController.$inject = [
     'familyService',
     'moment',
     'content',
+    'functionPoints',
 ];
 
 function RelatedItemController(
@@ -77,6 +79,7 @@ function RelatedItemController(
     familyService,
     moment,
     content,
+    functionPoints: IFunctionPointsService,
 ) {
     $scope.type = 'archiveWidget';
     $scope.itemListOptions = {
@@ -181,20 +184,25 @@ function RelatedItemController(
                     {update: angular.extend({}, $scope.origItem, $scope.item)},
                     item)
                     .then((newItem) => {
-                        notify.success(gettext('Story is associated as update.'));
-                        authoringWorkspace.edit(newItem);
-                    }, (response) => {
-                        if (angular.isDefined(response.data._message)) {
-                            notify.error(
-                                gettext(
-                                    'Failed to associate update: {{message}}',
-                                    {message: response.data._message},
-                                ),
-                            );
-                        } else {
-                            notify.error(gettext('There is an error. Failed to associate update.'));
-                        }
-                    });
+                        return functionPoints.run('archive:rewrite_after', Object.assign({
+                            _id: newItem._id,
+                            type: newItem.type,
+                        }, newItem));}).
+                        then((itemNext) => {
+                                notify.success(gettext('Story is associated as update.'));
+                                authoringWorkspace.edit(itemNext);
+                            }, (response) => {
+                                if (angular.isDefined(response.data._message)) {
+                                    notify.error(
+                                        gettext(
+                                            'Failed to associate update: {{message}}',
+                                            {message: response.data._message},
+                                        ),
+                                    );
+                                } else {
+                                    notify.error(gettext('There is an error. Failed to associate update.'));
+                                }
+                            });
             },
             class: 'open',
             icon: 'icon-expand',
